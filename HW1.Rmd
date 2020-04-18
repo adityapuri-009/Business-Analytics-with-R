@@ -1,0 +1,163 @@
+---
+title: 'BUAN6356: HomeWork 1'
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '3'
+  html_notebook:
+    theme: spacelab
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+  word_document:
+    toc: yes
+    toc_depth: '3'
+date: "`r Sys.Date()`"
+title2: Using utilities dataset
+---
+
+### *R code for Homework1*
+### 1. Load packages and check loading
+loading the necessary packages using pacman
+
+```{r LoadPackages, message=FALSE, warning=TRUE, results='hide'}
+if(!require("pacman")) install.packages("pacman")
+pacman::p_load(forecast, tidyverse, gplots, GGally, mosaic,
+               scales, mosaic, mapproj, mlbench, data.table, reshape2, gridExtra)
+search()
+theme_set(theme_classic())
+
+```
+
+### 2. Reading the utilities dataset and doing some data wrangling
+```{r readData}
+## Reading the dataset
+utilities <- fread("Utilities.csv")
+
+## Check data type of utilities: it should be a datatable
+class(utilities)
+
+## Are all the rows corresponds to unique companies or there are duplication of data?
+## If yes then the folowing should return a TRUE value
+length(unique(utilities$Company)) == length(utilities$Company)
+
+## looking at the summary statistics
+summary(utilities)
+
+## No missing values
+
+```
+### 3. Solving the specific questions
+#### Q1. Compute the minimum, maximum, mean, median, and standard deviation for each of the numeric variables using data.table package. Which variable(s) has the largest variability?  
+  
+_Solution_
+
+```{r Soln_Q1}
+# calculating minimum, maximum, mean, median, and standard deviation data for different variables with data table manipulation
+
+# Creating own summary function to calculate the asked summary statistics
+summary_function <- function(x){
+  return(list(minimum = min(x, na.rm = TRUE), maximum = max(x, na.rm = TRUE), mean = mean(x, na.rm = TRUE), median = median(x, na.rm = TRUE), std_dev = sd(x, na.rm =TRUE)))}
+
+# Caculating summary statistics using datatable
+summary_table <- utilities[, -c("Company")][,rbindlist(lapply(.SD,summary_function))]
+
+## adding the variable names
+summary_table <- cbind(var_name = names(utilities[, -c("Company")]), summary_table)
+
+# Measuring variablity using co-efficient of variation
+summary_table[, co_eff_var := std_dev/mean]
+
+## Printing summary table
+print(summary_table)
+
+```
+  
+#### Q2. Create boxplots for each of the numeric variables. Are there any extreme values for any of the variables? Which ones? Explain your answer.    
+  
+_Solution_
+```{r Soln_Q2, warning = FALSE}
+
+# Extracting the numerical variables
+utilities.num <- data.frame(utilities[,-c("Company")])
+
+## Creating all the ggplot objects
+p1 <- ggplot(utilities.num) + geom_boxplot(aes(x = "", Fixed_charge),fill = "gold1", outlier.color = "firebrick2") +theme(axis.title.x = element_blank()) +ylab("Fixed Charge")
+
+p2 <- ggplot(utilities.num) + geom_boxplot(aes(x = "", RoR),fill = "gold1", outlier.color = "firebrick2") +theme(axis.title.x = element_blank()) +ylab("Rate of Return")
+
+p3 <- ggplot(utilities.num) + geom_boxplot(aes(x = "", y = Cost),fill = "gold1", outlier.color = "firebrick2") +theme(axis.title.x = element_blank()) +ylab("Cost")
+
+p4 <- ggplot(utilities.num) + geom_boxplot(aes(x = "", y = Load_factor),fill = "gold1", outlier.color = "firebrick2") +theme(axis.title.x = element_blank()) +ylab("Load_factor")
+
+p5 <- ggplot(utilities.num) + geom_boxplot(aes(x = "", y = Demand_growth),fill = "gold1", outlier.color = "firebrick2") +theme(axis.title.x = element_blank()) +ylab("Demand Growth")
+
+p6 <- ggplot(utilities.num) + geom_boxplot(aes(x = "", y = Sales),fill = "gold1", outlier.color = "firebrick2") +theme(axis.title.x = element_blank()) +ylab("Sales")
+
+p7 <- ggplot(utilities.num) + geom_boxplot(aes(x = "", y = Nuclear),fill = "gold1", outlier.color = "firebrick2") +theme(axis.title.x = element_blank()) +ylab("Nuclear")
+
+p8 <- ggplot(utilities.num) + geom_boxplot(aes(x = "", y = Fuel_Cost),fill = "gold1", outlier.color = "firebrick2") +theme(axis.title.x = element_blank()) +ylab("Fuel_Cost")
+
+## Plot first four plots in one window
+grid.arrange(p1,p2,p3,p4, nrow = 2, ncol = 2)
+
+## Plot last four plots in another window
+grid.arrange(p5, p6, p7, p8, nrow = 2, ncol = 2)
+
+```
+
+#### Q3. Create a heatmap for the numeric variables. Discuss any interesting trend you see in this chart.  
+  
+_Solution_
+
+```{r Soln_Q3}
+# Heatmap using ggplot
+utilities.num <- data.frame(utilities[,-c("Company")])
+
+cor.mat <- round(cor(utilities.num),2) # rounded corelation matrix
+melted.cor.mat <- reshape2::melt(cor.mat)
+
+ggplot(melted.cor.mat, aes(x = Var1, y = Var2, fill = value)) + scale_fill_gradient(low = "Wheat", high = "orangered") + geom_tile() + geom_text(aes(x = Var1, y = Var2, label = value)) +ggtitle("Are there any highly correlated variables?") + theme(axis.title = element_blank())
+
+
+```
+
+#### Q4. Run principal component analysis using unscaled numeric variables in the dataset. How do you interpret the results from this model?   
+  
+_Solution_
+
+```{r Soln_Q4}
+### PCA on all the numerical variables without scaling
+utilities.num <- data.frame(utilities[,-c("Company")])
+
+pcs <- prcomp(na.omit(utilities.num)) 
+
+summary(pcs)
+
+pcs$rot  ## This will give the weightages of the original variables in the principal components
+
+```
+
+#### Q5. Next, run principal component model after scaling the numeric variables. Did the results/interpretations change? How so? Explain your answers.  
+  
+_Solution_
+
+```{r Soln_Q5}
+
+utilities.num <- data.frame(utilities[,-c("Company")])
+
+### PCA using Normalized variables
+pcs.cor <- prcomp(na.omit(utilities.num), scale. = TRUE)
+
+summary(pcs.cor)
+
+pcs.cor$rot ## This will give the weightages of the original variables in the principal components
+
+```
+
+
+
